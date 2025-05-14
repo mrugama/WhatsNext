@@ -39,6 +39,9 @@ struct TodoListView: View {
                     .onDelete(perform: database.deleteTask)
                 }
                 .listStyle(PlainListStyle())
+                .refreshable {
+                    await database.fetchTasks()
+                }
             }
             .navigationTitle("What's Next?")
         }
