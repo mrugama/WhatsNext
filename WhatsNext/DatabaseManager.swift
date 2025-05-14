@@ -1,7 +1,15 @@
 import SwiftUI
 import CloudKit
 
-struct TodoItem: Identifiable {
+protocol TodoItem
+where Self: Identifiable {
+    var record: CKRecord { get }
+    var id: CKRecord.ID { get }
+    var title: String { get set }
+    var isCompleted: Bool { get set }
+}
+
+struct TodoItemImpl: TodoItem {
     let record: CKRecord // Store the entire record
     
     var id: CKRecord.ID { record.recordID }
@@ -29,10 +37,24 @@ struct TodoItem: Identifiable {
     }
 }
 
-@Observable
 @MainActor
-final class DatabaseManager {
-    var todos: [TodoItem] = []
+protocol DatabaseManager
+where Self: Observable {
+    var todos: [any TodoItem] { get }
+    var newTask: String { get set }
+    var output: LocalizedStringKey { get set }
+    var alertPresented: Bool { get set }
+    
+    func addTask()
+    func toggleTask(_ task: any TodoItem)
+    func deleteTask(at offsets: IndexSet)
+    
+    func fetchTasks() async
+}
+
+@Observable
+final class DatabaseManagerImpl: DatabaseManager {
+    var todos: [any TodoItem] = []
     var newTask = ""
     var output: LocalizedStringKey = ""
     var alertPresented: Bool = false
@@ -46,7 +68,7 @@ final class DatabaseManager {
     }
     
     func addTask() {
-        let task = TodoItem(title: newTask.trimmingCharacters(in: .whitespaces))
+        let task = TodoItemImpl(title: newTask.trimmingCharacters(in: .whitespaces))
         Task {
             do {
                 try await ckManager.save(task)
@@ -59,7 +81,7 @@ final class DatabaseManager {
         }
     }
     
-    func toggleTask(_ task: TodoItem) {
+    func toggleTask(_ task: any TodoItem) {
         Task {
             do {
                 // Create a mutable copy of the record
@@ -70,7 +92,7 @@ final class DatabaseManager {
                 updatedRecord["isCompleted"] = (currentValue == 0 ? 1 : 0) as CKRecordValue
                 
                 // Save the updated record
-                try await ckManager.save(TodoItem(record: updatedRecord))
+                try await ckManager.save(TodoItemImpl(record: updatedRecord))
                 await fetchTasks() // Refresh data
             } catch {
                 output = LocalizedStringKey(error.localizedDescription)
@@ -107,32 +129,4 @@ final class DatabaseManager {
     }
 }
 
-actor CloudKitManager {
-    private let database: CKDatabase
-    
-    init() {
-        let container = CKContainer(identifier: "iCloud.com.techonte.WhatsNext.ToDo")
-        self.database = container.privateCloudDatabase
-    }
-    
-    func save(_ item: TodoItem) async throws {
-        try await database.save(item.record)
-    }
-    
-    func remove(_ item: TodoItem) async throws {
-        try await database.deleteRecord(withID: item.record.recordID)
-    }
-    
-    func fetchAll() async throws -> [TodoItem] {
-        let query = CKQuery(
-            recordType: "ToDoItem",
-            predicate: NSPredicate(value: true) // Fetch all records
-        )
-        let result = try await database.records(matching: query)
-        
-        return result.matchResults.compactMap {
-            guard case .success(let record) = $0.1 else { return nil }
-            return TodoItem(record: record) // Preserve the original record
-        }
-    }
-}
+
