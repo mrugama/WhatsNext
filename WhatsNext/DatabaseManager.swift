@@ -38,7 +38,6 @@ final class DatabaseManager {
     var alertPresented: Bool = false
     // MARK: - Private properties
     private let ckManager = CloudKitManager()
-    private var databaseTask: Task<Void, Error>?
     
     init() {
         Task {
@@ -48,18 +47,14 @@ final class DatabaseManager {
     
     func addTask() {
         let task = TodoItem(title: newTask.trimmingCharacters(in: .whitespaces))
-        Task { // Use a new Task (don't reuse databaseTask)
+        Task {
             do {
                 try await ckManager.save(task)
-                await MainActor.run {
-                    newTask = ""
-                    todos.append(task)
-                }
+                newTask = ""
+                todos.append(task)
             } catch {
-                await MainActor.run {
-                    output = LocalizedStringKey(error.localizedDescription)
-                    alertPresented = true
-                }
+                output = LocalizedStringKey(error.localizedDescription)
+                alertPresented = true
             }
         }
     }
@@ -78,10 +73,8 @@ final class DatabaseManager {
                 try await ckManager.save(TodoItem(record: updatedRecord))
                 await fetchTasks() // Refresh data
             } catch {
-                await MainActor.run {
-                    output = LocalizedStringKey(error.localizedDescription)
-                    alertPresented = true
-                }
+                output = LocalizedStringKey(error.localizedDescription)
+                alertPresented = true
             }
         }
     }
@@ -95,10 +88,8 @@ final class DatabaseManager {
                 }
                 await fetchTasks() // Refresh after deletion
             } catch {
-                await MainActor.run {
-                    output = LocalizedStringKey(error.localizedDescription)
-                    alertPresented = true
-                }
+                output = LocalizedStringKey(error.localizedDescription)
+                alertPresented = true
             }
         }
     }
@@ -108,9 +99,7 @@ final class DatabaseManager {
     func fetchTasks() async {
         do {
             let fetchedTodos = try await ckManager.fetchAll()
-            await MainActor.run {
-                todos = fetchedTodos
-            }
+            todos = fetchedTodos
         } catch {
             output = LocalizedStringKey(error.localizedDescription)
             alertPresented = true
